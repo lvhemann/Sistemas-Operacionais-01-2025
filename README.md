@@ -110,3 +110,50 @@ int main() {
 }
 
 ```
+
+
+```
+#include <stdio.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+sem_t sem;
+
+void* P2(void* arg) {
+    printf("P2 (baixa prioridade): tentando entrar na RC\n");
+    sem_wait(&sem);
+    printf("P2: entrou na RC\n");
+    sleep(5); // segurando a RC por muito tempo
+    printf("P2: saindo da RC\n");
+    sem_post(&sem);
+    return NULL;
+}
+
+void* P1(void* arg) {
+    sleep(1); // garantir que P2 entre antes
+    printf("P1 (alta prioridade): tentando entrar na RC\n");
+    sem_wait(&sem);
+    printf("P1: entrou na RC\n");
+    sleep(1);
+    printf("P1: saindo da RC\n");
+    sem_post(&sem);
+    return NULL;
+}
+
+int main() {
+    pthread_t t1, t2;
+    sem_init(&sem, 0, 1);
+
+    pthread_create(&t1, NULL, P2, NULL); // baixa prioridade
+    pthread_create(&t2, NULL, P1, NULL); // alta prioridade
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    sem_destroy(&sem);
+    return 0;
+}
+
+
+```
