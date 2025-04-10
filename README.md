@@ -57,3 +57,56 @@ void processo(int i) {
 }
 
 ```
+
+```
+// Exemplo de Peterson usando pthreads (duas threads)
+#include <stdio.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <unistd.h>
+
+#define NUM_THREADS 2
+
+volatile bool flag[NUM_THREADS] = {false, false};
+volatile int turn;
+
+void enter_region(int i) {
+    int j = 1 - i;
+    flag[i] = true;
+    turn = j;
+    while (flag[j] && turn == j); // espera ocupada
+}
+
+void leave_region(int i) {
+    flag[i] = false;
+}
+
+void* thread_function(void* arg) {
+    int id = *(int*)arg;
+    for (int k = 0; k < 5; ++k) {
+        enter_region(id);
+        printf("🔐 Thread %d entrou na região crítica (iter %d)\n", id, k);
+        sleep(1); // simula trabalho na região crítica
+        printf("🔓 Thread %d saindo da região crítica (iter %d)\n", id, k);
+        leave_region(id);
+        sleep(1); // simula trabalho fora da região crítica
+    }
+    return NULL;
+}
+
+int main() {
+    pthread_t threads[NUM_THREADS];
+    int ids[NUM_THREADS] = {0, 1};
+
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        pthread_create(&threads[i], NULL, thread_function, &ids[i]);
+    }
+
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        pthread_join(threads[i], NULL);
+    }
+
+    return 0;
+}
+
+```
