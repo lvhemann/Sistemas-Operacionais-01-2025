@@ -230,3 +230,48 @@ int main() {
 
 
 ```
+
+```
+#include <stdio.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+sem_t task; // semáforo para controlar a ordem
+
+void* Pi(void* arg) {
+    printf("Pi: executando alguma tarefa...\n");
+    sleep(2); // simula tempo de execução
+    printf("Pi: finalizou a tarefa, sinalizando para Pj.\n");
+
+    sem_post(&task); // equivalente a signal(&task)
+    return NULL;
+}
+
+void* Pj(void* arg) {
+    printf("Pj: esperando Pi terminar...\n");
+    sem_wait(&task); // bloqueia até Pi chamar signal/post
+    printf("Pj: agora pode continuar!\n");
+
+    return NULL;
+}
+
+int main() {
+    pthread_t t1, t2;
+
+    sem_init(&task, 0, 0); // inicia com 0 → bloqueado
+
+    pthread_create(&t1, NULL, Pi, NULL);
+    pthread_create(&t2, NULL, Pj, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    sem_destroy(&task);
+
+    return 0;
+}
+
+
+
+```
