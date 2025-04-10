@@ -159,3 +159,74 @@ int main() {
 
 
 ```
+
+```
+#include <stdio.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+sem_t S, Q; // nossos dois recursos
+
+void* P1(void* arg) {
+    printf("P1 tentando pegar S...\n");
+    sem_wait(&S);
+    printf("P1 pegou S\n");
+
+    sleep(1); // simula trabalho, dá tempo de P2 pegar Q
+
+    printf("P1 tentando pegar Q...\n");
+    sem_wait(&Q);
+    printf("P1 pegou Q\n");
+
+    printf("P1 executando região crítica...\n");
+    sleep(1);
+
+    sem_post(&Q);
+    sem_post(&S);
+
+    printf("P1 terminou e liberou os recursos.\n");
+    return NULL;
+}
+
+void* P2(void* arg) {
+    printf("P2 tentando pegar Q...\n");
+    sem_wait(&Q);
+    printf("P2 pegou Q\n");
+
+    sleep(1); // simula trabalho, dá tempo de P1 pegar S
+
+    printf("P2 tentando pegar S...\n");
+    sem_wait(&S);
+    printf("P2 pegou S\n");
+
+    printf("P2 executando região crítica...\n");
+    sleep(1);
+
+    sem_post(&S);
+    sem_post(&Q);
+
+    printf("P2 terminou e liberou os recursos.\n");
+    return NULL;
+}
+
+int main() {
+    pthread_t t1, t2;
+
+    sem_init(&S, 0, 1); // semáforo S
+    sem_init(&Q, 0, 1); // semáforo Q
+
+    pthread_create(&t1, NULL, P1, NULL);
+    pthread_create(&t2, NULL, P2, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    sem_destroy(&S);
+    sem_destroy(&Q);
+
+    return 0;
+}
+
+
+```
