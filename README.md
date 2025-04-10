@@ -118,40 +118,42 @@ int main() {
 #include <semaphore.h>
 #include <unistd.h>
 
-sem_t sem;
+sem_t semaforo; // o nosso semáforo
 
-void* P2(void* arg) {
-    printf("P2 (baixa prioridade): tentando entrar na RC\n");
-    sem_wait(&sem);
-    printf("P2: entrou na RC\n");
-    sleep(5); // segurando a RC por muito tempo
-    printf("P2: saindo da RC\n");
-    sem_post(&sem);
-    return NULL;
-}
-
-void* P1(void* arg) {
-    sleep(1); // garantir que P2 entre antes
-    printf("P1 (alta prioridade): tentando entrar na RC\n");
-    sem_wait(&sem);
-    printf("P1: entrou na RC\n");
-    sleep(1);
-    printf("P1: saindo da RC\n");
-    sem_post(&sem);
+void* tarefa(void* arg) {
+    int id = *((int*)arg);
+    
+    printf("Thread %d tentando entrar na região crítica...\n", id);
+    
+    sem_wait(&semaforo); // espera pelo semáforo (equivale ao wait/acquire)
+    
+    printf("Thread %d entrou na região crítica!\n", id);
+    sleep(2); // simula trabalho dentro da região crítica
+    printf("Thread %d saindo da região crítica.\n", id);
+    
+    sem_post(&semaforo); // libera o semáforo (equivale ao signal/release)
+    
     return NULL;
 }
 
 int main() {
-    pthread_t t1, t2;
-    sem_init(&sem, 0, 1);
+    pthread_t threads[2];
+    int ids[2] = {1, 2};
 
-    pthread_create(&t1, NULL, P2, NULL); // baixa prioridade
-    pthread_create(&t2, NULL, P1, NULL); // alta prioridade
+    // inicializa o semáforo com valor 1 (semáforo binário = mutex)
+    sem_init(&semaforo, 0, 1);
 
-    pthread_join(t1, NULL);
-    pthread_join(t2, NULL);
+    // cria duas threads
+    pthread_create(&threads[0], NULL, tarefa, &ids[0]);
+    pthread_create(&threads[1], NULL, tarefa, &ids[1]);
 
-    sem_destroy(&sem);
+    // espera as threads terminarem
+    pthread_join(threads[0], NULL);
+    pthread_join(threads[1], NULL);
+
+    // destrói o semáforo
+    sem_destroy(&semaforo);
+
     return 0;
 }
 
