@@ -1,204 +1,159 @@
 # Sistemas-Operacionais-01-2025
-
-## Modos de Usuário 
-
-```bash  
-  ps aux
-```
-
-```bash 
-ps -eo pid,comm,pri,ni,pcpu,state
-```
-
-
-```bash 
-sudo apt install htop –y
-```
-
-```bash 
-htop
-```
-
-## Realização de um Read
-
-```bash 
+## Exemplo 1
+'''
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>
-
-int main(){
-	int fd;
-	char buffer[100];
-	ssize_t contador;
-
-	fd = open("arquivo.txt", O_RDONLY);
-	if (fd == -1){
-		perror("erro ao abrir o arquivo");
-		return 1;
-	}
-
-	contador = read(fd, buffer, sizeof(buffer) - 1);
-	if(contador == -1){
-		perror("erro ao ler o arquivo");
-		close(fd);
-		return 1;
-	}
-
-	buffer[contador] =  '\0';
-	
-	printf("Conteudo de arquivo:\n%s\n", buffer);
-	close(fd);
-	return 0;
-}
-```
-
-```bash 
-echo "Este é um teste de leitura." > arquivo.txt
-```
-
-```bash 
-gcc read_example.c -o read_example 
-```
-
-```bash 
-./read_example
-```
-
-## Outros Testes
-# Excluir o arquivo .txt
-
-```bash
-rm arquivo.txt
-```
-
-# Adicionar mais informação ao arquivo
-```bash 
-echo "Linha 1" > arquivo.txt
-```
-
-## Exemplo de Proteção Usando Anéis
-```bash
-cat /dev/mem
-```
-
-```bash
-sudo hexdump -C /dev/mem | head
-```
-
-## Exemplo usando chamadas de sistema
-```bash
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>    // Para open()
-#include <unistd.h>   // Para read(), write(), close()
-#include <errno.h>    // Para lidar com erros
-
-#define BUFFER_SIZE 1024  // Tamanho do buffer de leitura
-
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        fprintf(stderr, "Uso: %s <arquivo_origem> <arquivo_destino>\n", argv[0]);
-        return 1;
-    }
-
-    int fd1, fd2;  // File descriptors
-    char buffer[BUFFER_SIZE];
-    ssize_t bytes_lidos, bytes_escritos;
-
-    // Abrir arquivo de origem (fd1) no modo leitura
-    fd1 = open(argv[1], O_RDONLY);
-    if (fd1 == -1) {
-        perror("Erro ao abrir o arquivo de origem");
-        return 1;
-    }
-
-    // Criar/abrir arquivo de destino (fd2) no modo escrita
-    fd2 = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd2 == -1) {
-        perror("Erro ao criar o arquivo de destino");
-        close(fd1);
-        return 1;
-    }
-
-    // Loop de leitura e escrita
-    while ((bytes_lidos = read(fd1, buffer, BUFFER_SIZE)) > 0) {
-        bytes_escritos = write(fd2, buffer, bytes_lidos);
-        if (bytes_escritos != bytes_lidos) {
-            perror("Erro ao escrever no arquivo de destino");
-            close(fd1);
-            close(fd2);
-            return 1;
-        }
-    }
-
-    if (bytes_lidos == -1) {
-        perror("Erro ao ler o arquivo de origem");
-    }
-
-    // Fechar os arquivos
-    close(fd1);
-    close(fd2);
-
-    printf("Cópia concluída com sucesso!\n");
-    return 0;
-}
-```
-
-```bash
-echo "Este é um teste de cópia via syscalls!" > arquivo_origem.txt
-```
-
-```bash
-gcc cp_syscalls.c -o cp_syscalls
-```
-
-```bash
-./cp_syscalls arquivo_origem.txt arquivo_destino.txt
-```
-
-```bash
-cat arquivo_destino.txt
-```
-
-## Intercepta e exibe todas as chamadas de sistema feitas pelo cp_syscalls
-```bash
-strace ./cp_syscalls arquivo_origem.txt arquivo_destino.txt
-```
-
-## Segmentação de memória
-
-```bash
-#include <stdio.h>
-#include <stdlib.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include <unistd.h>
 
-void funcao_pilha() {
-    int var_pilha = 10;
-    printf("Endereço da variável na Stack: %p\n", (void*)&var_pilha);
+#define N 5
+#define NUM_ITENS 10
+
+int fila[N];
+int in = 0, out = 0;
+
+sem_t empty;
+sem_t full;
+pthread_mutex_t mutex;
+
+void* produtor(void* arg) {
+    for (int i = 0; i < NUM_ITENS; i++) {
+        int item = rand() % 100;
+
+        sem_wait(&empty);
+        pthread_mutex_lock(&mutex);
+
+        fila[in] = item;
+        printf("Produtor: inseriu %d na posição %d\n", item, in);
+        in = (in + 1) % N;
+
+        // ERRO: esquecido de liberar o mutex
+        pthread_mutex_unlock(&mutex);  // INTENCIONALMENTE OMITIDO
+        sem_post(&full);
+
+        sleep(1);
+    }
+    pthread_exit(NULL);
+}
+
+void* consumidor(void* arg) {
+    for (int i = 0; i < NUM_ITENS; i++) {
+        sem_wait(&full);
+        pthread_mutex_lock(&mutex);  // Vai travar aqui para sempre após o primeiro loop
+
+        int item = fila[out];
+        printf("Consumidor: removeu %d da posição %d\n", item, out);
+        out = (out + 1) % N;
+
+        pthread_mutex_unlock(&mutex);
+        sem_post(&empty);
+
+        sleep(1);
+    }
+    pthread_exit(NULL);
 }
 
 int main() {
-    void *heap_inicio = sbrk(0);
-    printf("Heap inicial: %p\n", heap_inicio);
+    pthread_t t_produtor, t_consumidor;
 
-    int *ptr = malloc(100 * sizeof(int)); // Alocação dinâmica
-    printf("Endereço alocado na Heap: %p\n", (void*)ptr);
+    sem_init(&empty, 0, N);
+    sem_init(&full, 0, 0);
+    pthread_mutex_init(&mutex, NULL);
 
-    funcao_pilha(); // Chamada para ver a pilha crescer
+    pthread_create(&t_produtor, NULL, produtor, NULL);
+    pthread_create(&t_consumidor, NULL, consumidor, NULL);
 
-    free(ptr); // Libera memória
+    pthread_join(t_produtor, NULL);
+    pthread_join(t_consumidor, NULL);
+
+    sem_destroy(&empty);
+    sem_destroy(&full);
+    pthread_mutex_destroy(&mutex);
+
     return 0;
 }
 
-```
+### Exemplo 2
 
-```bash
-gcc memoria.c -o memoria
-```
+'''
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
 
-```bash
-./memoria
-```
+#define N 3  // Tamanho da fila (buffer)
+#define NUM_PRODUTOS 5
+#define NUM_CONSUMOS 10
+
+int fila[N];
+int in = 0, out = 0;
+
+sem_t empty;   // Quantos espaços vazios
+sem_t full;    // Quantos itens disponíveis
+pthread_mutex_t mutex;
+
+void* produtor(void* arg) {
+    for (int i = 0; i < NUM_PRODUTOS; i++) {
+        int item = rand() % 100;
+
+        sem_wait(&empty);               // Espera espaço livre
+        pthread_mutex_lock(&mutex);     // Região crítica
+
+        fila[in] = item;
+        printf("Produtor: inseriu %d na posição %d\n", item, in);
+        in = (in + 1) % N;
+
+        pthread_mutex_unlock(&mutex);
+        sem_post(&full);                // Sinaliza item disponível
+
+        sleep(1);
+    }
+    printf("Produtor finalizado.\n");
+    pthread_exit(NULL);
+}
+
+void* consumidor(void* arg) {
+    for (int i = 0; i < NUM_CONSUMOS; i++) {
+        printf("Consumidor esperando item...\n");
+        sem_wait(&full);                // Espera item disponível
+        pthread_mutex_lock(&mutex);     // Região crítica
+
+        int item = fila[out];
+        printf("Consumidor: removeu %d da posição %d\n", item, out);
+        out = (out + 1) % N;
+
+        pthread_mutex_unlock(&mutex);
+        sem_post(&empty);               // Sinaliza espaço livre
+
+        sleep(1);
+    }
+    printf("Consumidor finalizado.\n");
+    pthread_exit(NULL);
+}
+
+int main() {
+    pthread_t t_produtor, t_consumidor;
+
+    sem_init(&empty, 0, N);
+    sem_init(&full, 0, 0);
+    pthread_mutex_init(&mutex, NULL);
+
+    pthread_create(&t_produtor, NULL, produtor, NULL);
+    pthread_create(&t_consumidor, NULL, consumidor, NULL);
+
+    pthread_join(t_produtor, NULL);
+    pthread_join(t_consumidor, NULL);  // Vai travar após o 5º item
+
+    sem_destroy(&empty);
+    sem_destroy(&full);
+    pthread_mutex_destroy(&mutex);
+
+    return 0;
+}
+
+'''
+'''
+
 
