@@ -1,6 +1,6 @@
 # Sistemas-Operacionais-01-2025
 ## Exemplo 1
-'''
+```
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -74,11 +74,11 @@ int main() {
     return 0;
 }
 
-'''
+```
 
 ### Exemplo 2
 
-'''
+```
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -156,6 +156,6 @@ int main() {
 }
 
 
-'''
+```
 
 
