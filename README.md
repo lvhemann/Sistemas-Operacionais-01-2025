@@ -501,3 +501,130 @@ int main() {
 }
 
 ```
+
+### Exemplo 7
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+
+// Configuração
+#define MODO 1  // 0 = Deadlock, 1 = Ordem fixa, 2 = Tudo ou nada
+#define QTD_RECURSOS 3
+#define QTD_PROCESSOS 4
+
+pthread_mutex_t recursos[QTD_RECURSOS];
+
+// Cada processo tem um conjunto de recursos que ele vai usar
+int requisicoes[QTD_PROCESSOS][QTD_RECURSOS] = {
+    {0, 1},      // P1: R1, R2
+    {1, 2},      // P2: R2, R3
+    {2, 0},      // P3: R3, R1
+    {0, 1, 2}    // P4: R1, R2, R3
+};
+
+void* processo(void* arg) {
+    int pid = *((int*)arg);
+    printf("P%d: iniciado\n", pid + 1);
+
+#if MODO == 0
+    // Deadlock: ordem original, pode causar espera circular
+    for (int i = 0; i < QTD_RECURSOS; i++) {
+        int r = requisicoes[pid][i];
+        if (r >= 0 && r < QTD_RECURSOS) {
+            printf("P%d: tentando adquirir R%d...\n", pid + 1, r + 1);
+            pthread_mutex_lock(&recursos[r]);
+            printf("P%d: R%d adquirido\n", pid + 1, r + 1);
+            sleep(1);
+        }
+    }
+
+#elif MODO == 1
+    // Ordem fixa crescente de recursos (ex: R1 → R2 → R3)
+    for (int r = 0; r < QTD_RECURSOS; r++) {
+        for (int i = 0; i < QTD_RECURSOS; i++) {
+            if (requisicoes[pid][i] == r) {
+                printf("P%d: tentando adquirir R%d (ordem fixa)\n", pid + 1, r + 1);
+                pthread_mutex_lock(&recursos[r]);
+                printf("P%d: R%d adquirido\n", pid + 1, r + 1);
+                sleep(1);
+            }
+        }
+    }
+
+#elif MODO == 2
+    // Tudo ou nada (pega todos recursos ou nenhum)
+    while (1) {
+        int adquiridos[QTD_RECURSOS] = {0};
+        int sucesso = 1;
+
+        // Tentativa de travar
+        for (int i = 0; i < QTD_RECURSOS; i++) {
+            int r = requisicoes[pid][i];
+            if (r >= 0 && r < QTD_RECURSOS) {
+                if (pthread_mutex_trylock(&recursos[r]) == 0) {
+                    adquiridos[r] = 1;
+                } else {
+                    sucesso = 0;
+                    break;
+                }
+            }
+        }
+
+        if (sucesso) {
+            printf("P%d: todos os recursos adquiridos (tudo ou nada)\n", pid + 1);
+            break;
+        } else {
+            for (int r = 0; r < QTD_RECURSOS; r++) {
+                if (adquiridos[r]) pthread_mutex_unlock(&recursos[r]);
+            }
+            usleep(100000);  // espera e tenta de novo
+        }
+    }
+
+#endif
+
+    printf("P%d: executando...\n", pid + 1);
+    sleep(2);
+
+    // Liberação dos recursos
+    for (int i = QTD_RECURSOS - 1; i >= 0; i--) {
+        int r = requisicoes[pid][i];
+        if (r >= 0 && r < QTD_RECURSOS) {
+            pthread_mutex_unlock(&recursos[r]);
+            printf("P%d: liberou R%d\n", pid + 1, r + 1);
+        }
+    }
+
+    printf("P%d: finalizado\n", pid + 1);
+    return NULL;
+}
+
+int main() {
+    pthread_t threads[QTD_PROCESSOS];
+    int pids[QTD_PROCESSOS];
+
+    for (int i = 0; i < QTD_RECURSOS; i++) {
+        pthread_mutex_init(&recursos[i], NULL);
+    }
+
+    for (int i = 0; i < QTD_PROCESSOS; i++) {
+        pids[i] = i;
+        pthread_create(&threads[i], NULL, processo, &pids[i]);
+        sleep(1);  // espaçamento entre as criações para melhor visualização
+    }
+
+    for (int i = 0; i < QTD_PROCESSOS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    for (int i = 0; i < QTD_RECURSOS; i++) {
+        pthread_mutex_destroy(&recursos[i]);
+    }
+
+    return 0;
+}
+
+```
+
